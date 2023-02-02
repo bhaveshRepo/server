@@ -1,13 +1,16 @@
 const express = require('express')
-const { getQuestions, createQuestions, createUser } = require('../prismaClient')
+const { generateCode } = require('../middleware')
+const { createQuestions, getQuestions } = require('../prismaClient')
+const PrismaClient = require('@prisma/client').PrismaClient
+const prismaClient = new PrismaClient()
 
 const router = express.Router()
 
 router.get('/:id', async (req, res) => {
 
-    const id = req.params.id
+    const q_set = req.params.id
 
-    let result = await getQuestions(parseInt(id))
+    let result = await getQuestions(q_set)
 
     console.log(result);
     res.send({
@@ -18,24 +21,51 @@ router.get('/:id', async (req, res) => {
     })
 })
 
-router.post('/create/:id', async (req, res) => {
+router.post('/create', async (req, res) => {
 
-    const id = req.params.id
-    let { question, options, answer } = req.body
+    let q_set;
+    let { data } = req.body
+    let userQuestions = []
+    let dataParsedIntoJson = JSON.parse(data)
 
-    let result = await createQuestions(question, options, answer, parseInt(id))
+
+    let lastId = await prismaClient.questions.findFirst({
+        orderBy: {
+            id: 'desc'
+        }
+    })
+
+    if (!lastId) {
+        q_set = `U1001`
+    } else {
+        q_set = generateCode(lastId.q_set)
+    }
+
+    // let userQuestion = [{ question: "", optionA: "", optionB: "", optionC: "", optionD: "", answer: "" }]
+
+    dataParsedIntoJson.map((object) => {
+        if (object.question != "" && object.option.length != 0 && object.answer != "") {
+            userQuestions.push({
+                question: object.question,
+                optionA: object.option[0],
+                optionB: object.option[1],
+                optionC: object.option[2],
+                optionD: object.option[3],
+                answer: object.answer,
+                q_set
+            })
+        }
+    })
+
+    let result = await createQuestions(userQuestions)
 
     res.send({
         "type": `Success`,
         "data": {
-            result
+            link : `http://localhost:9000/question/${q_set}`,
+            Question_set: q_set
         }
     })
-})
-
-router.get('/create/user', async (req, res) => {
-    let result = await createUser();
-    res.json({ result });
 })
 
 module.exports = router
